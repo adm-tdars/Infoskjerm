@@ -1,8 +1,15 @@
 #!/bin/bash
 
-# Install Google Chrome and other packages
+# Remove Chromium
+sudo apt remove --purge chromium-browser -y
+
+# Install Google Chrome
 wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
 sudo apt install ./google-chrome-stable_current_amd64.deb -y
+rm google-chrome-stable_current_amd64.deb
+
+# Uninstall the telemetrytv snap package
+sudo snap remove telemetrytv
 
 # Set the URL to open in the kiosk window. for example cloudcast
 URL="https://v.getcloudcast.com"
