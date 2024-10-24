@@ -17,7 +17,7 @@ URL="https://v.getcloudcast.com"
 # Create the kiosk script
 echo '#!/bin/bash
 while true; do
-    google-chrome --noerrdialogs --disable-infobars --kiosk '"$URL"'
+    google-chrome --noerrdialogs --disable-infobars --kiosk '"https://v.getcloudcast.com"'
 done' | sudo tee /home/infoskjerm/kiosk.sh >/dev/null
 
 # Set the correct permissions for the kiosk script
