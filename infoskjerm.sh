@@ -76,20 +76,3 @@ echo "Launching Chrome..."
 google-chrome --no-first-run --password-store=basic &
 
 echo "Script finished."
-
-export DISPLAY=:0
-export XDG_RUNTIME_DIR="/run/user/1000"  # tilpass for din bruker om nødvendig
-
-echo "[INFO] Starter overvåking av Google Chrome..."
-
-while true; do
-    if ! pgrep -x "chrome" > /dev/null; then
-        echo "[INFO] Starter Google Chrome..."
-        nohup google-chrome "http://localhost:8080" \
-            --noerrdialogs \
-            --disable-infobars \
-            --incognito \
-            > /dev/null 2>&1 &
-    fi
-    sleep 5  # sjekk hvert 5. sekund
-done
