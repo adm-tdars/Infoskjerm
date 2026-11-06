@@ -3,13 +3,18 @@
 set -e
 
 KIOSK_USER="infoskjerm"
+KIOSK_HOME="/home/$KIOSK_USER"
 KIOSK_URL="https://infoskjerm.ssnit.no/screen"
+KIOSK_PROFILE="$KIOSK_HOME/.config/google-chrome-kiosk"
 
-echo "Setter opp Chrome kiosk..."
+echo "=========================================="
+echo " Setter opp SSN Infoskjerm"
+echo "=========================================="
 
 # --------------------------------------------------
 # 1. Remove Chromium if installed
 # --------------------------------------------------
+
 echo "Fjerner eventuell Chromium-installasjon..."
 
 sudo apt remove --purge -y chromium-browser chromium 2>/dev/null || true
@@ -19,120 +24,156 @@ sudo apt autoremove -y
 # --------------------------------------------------
 # 2. Remove old kiosk configuration
 # --------------------------------------------------
-if [ -f /home/$KIOSK_USER/kiosk.sh ]; then
-    sudo rm -f /home/$KIOSK_USER/kiosk.sh
-    echo "Fjernet gammel kiosk.sh"
-fi
 
-if [ -f /etc/xdg/autostart/kiosk.desktop ]; then
-    sudo rm -f /etc/xdg/autostart/kiosk.desktop
-    echo "Fjernet gammel kiosk.desktop"
-fi
+echo "Fjerner gammelt kiosk-oppsett..."
 
+sudo rm -f "$KIOSK_HOME/kiosk.sh"
+sudo rm -f /etc/xdg/autostart/kiosk.desktop
+sudo rm -f "$KIOSK_HOME/.config/autostart/kiosk.desktop"
 
-# --------------------------------------------------
-# 3. Remove old Chrome extension policy
-# --------------------------------------------------
-if [ -f /etc/opt/chrome/policies/managed/extension_policy.json ]; then
-    sudo rm -f /etc/opt/chrome/policies/managed/extension_policy.json
-    echo "Fjernet gammel Chrome extension-policy"
-fi
+# Remove old extension policy
+sudo rm -f /etc/opt/chrome/policies/managed/extension_policy.json
 
 
 # --------------------------------------------------
-# 4. Remove old kiosk cronjob
+# 3. Install Google Chrome if missing
 # --------------------------------------------------
-sudo crontab -l 2>/dev/null | grep -v "killall chrome" | sudo crontab - 2>/dev/null || true
 
-
-# --------------------------------------------------
-# 5. Install Google Chrome if missing
-# --------------------------------------------------
 if ! command -v google-chrome >/dev/null 2>&1; then
 
-    echo "Chrome er ikke installert. Installerer..."
+    echo "Google Chrome er ikke installert. Installerer..."
 
-    wget -q -O /tmp/google-chrome-stable_current_amd64.deb \
+    wget -q -O /tmp/google-chrome.deb \
         https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
 
-    sudo apt install -y /tmp/google-chrome-stable_current_amd64.deb
+    sudo apt install -y /tmp/google-chrome.deb
 
-    rm -f /tmp/google-chrome-stable_current_amd64.deb
+    rm -f /tmp/google-chrome.deb
 
-    echo "Chrome installert."
+    echo "Google Chrome installert."
 
 else
-    echo "Chrome er allerede installert."
+    echo "Google Chrome er allerede installert."
 fi
 
 
 # --------------------------------------------------
-# 6. Create kiosk startup script
+# 4. Create dedicated kiosk profile
 # --------------------------------------------------
-echo "Oppretter kiosk-script..."
 
-sudo tee /home/$KIOSK_USER/kiosk.sh >/dev/null <<EOF
+echo "Oppretter egen Chrome-profil for infoskjerm..."
+
+sudo mkdir -p "$KIOSK_PROFILE"
+sudo chown -R "$KIOSK_USER:$KIOSK_USER" "$KIOSK_PROFILE"
+
+
+# --------------------------------------------------
+# 5. Create kiosk startup script
+# --------------------------------------------------
+
+echo "Oppretter kiosk.sh..."
+
+sudo tee "$KIOSK_HOME/kiosk.sh" >/dev/null <<EOF
 #!/bin/bash
 
-sleep 5
+KIOSK_URL="$KIOSK_URL"
+KIOSK_PROFILE="$KIOSK_PROFILE"
 
-# Disable screen blanking / power saving
-xset s off
-xset -dpms
-xset s noblank
+# Wait for desktop to finish starting
+sleep 8
 
-# Remove possible Chrome crash warning
-sed -i 's/"exit_type":"Crashed"/"exit_type":"Normal"/' \
-    /home/$KIOSK_USER/.config/google-chrome/Default/Preferences 2>/dev/null || true
+# Disable screen blanking
+xset s off 2>/dev/null || true
+xset s noblank 2>/dev/null || true
+xset -dpms 2>/dev/null || true
 
-# Start Chrome in kiosk mode
-exec google-chrome \
+# Close any Chrome processes already running
+pkill -f google-chrome 2>/dev/null || true
+pkill -f chrome 2>/dev/null || true
+
+sleep 2
+
+# Make sure kiosk profile directory exists
+mkdir -p "\$KIOSK_PROFILE"
+
+# Start Chrome in real kiosk mode
+exec /usr/bin/google-chrome \
     --kiosk \
+    --start-fullscreen \
     --no-first-run \
     --no-default-browser-check \
-    --password-store=basic \
     --disable-session-crashed-bubble \
     --disable-infobars \
-    "$KIOSK_URL"
+    --disable-translate \
+    --disable-features=Translate \
+    --password-store=basic \
+    --user-data-dir="\$KIOSK_PROFILE" \
+    "\$KIOSK_URL"
 EOF
 
-sudo chmod +x /home/$KIOSK_USER/kiosk.sh
-sudo chown $KIOSK_USER:$KIOSK_USER /home/$KIOSK_USER/kiosk.sh
+sudo chmod +x "$KIOSK_HOME/kiosk.sh"
+sudo chown "$KIOSK_USER:$KIOSK_USER" "$KIOSK_HOME/kiosk.sh"
 
 
 # --------------------------------------------------
-# 7. Create autostart entry for kiosk user
+# 6. Create autostart
 # --------------------------------------------------
-echo "Setter opp automatisk oppstart..."
 
-sudo mkdir -p /home/$KIOSK_USER/.config/autostart
+echo "Oppretter autostart..."
 
-sudo tee /home/$KIOSK_USER/.config/autostart/kiosk.desktop >/dev/null <<EOF
+sudo mkdir -p "$KIOSK_HOME/.config/autostart"
+
+sudo tee "$KIOSK_HOME/.config/autostart/kiosk.desktop" >/dev/null <<EOF
 [Desktop Entry]
 Type=Application
-Name=SSN Infoskjerm
-Comment=Starter SSN infoskjerm i Chrome kiosk mode
-Exec=/home/$KIOSK_USER/kiosk.sh
+Name=SSN Infoskjerm Kiosk
+Comment=Starter SSN Infoskjerm
+Exec=$KIOSK_HOME/kiosk.sh
 Terminal=false
+Hidden=false
+NoDisplay=false
 X-GNOME-Autostart-enabled=true
+StartupNotify=false
 EOF
 
-sudo chown -R $KIOSK_USER:$KIOSK_USER /home/$KIOSK_USER/.config/autostart
+sudo chown -R "$KIOSK_USER:$KIOSK_USER" "$KIOSK_HOME/.config"
+
+
+# --------------------------------------------------
+# 7. Disable Chrome normal autostart if present
+# --------------------------------------------------
+
+echo "Sjekker etter andre Chrome autostart-filer..."
+
+find "$KIOSK_HOME/.config/autostart" \
+    -type f \
+    -iname "*chrome*" \
+    ! -name "kiosk.desktop" \
+    -delete 2>/dev/null || true
 
 
 # --------------------------------------------------
 # Finished
 # --------------------------------------------------
+
 echo ""
 echo "=========================================="
-echo " SSN Infoskjerm er konfigurert"
+echo " FERDIG!"
 echo "=========================================="
 echo ""
-echo "URL: $KIOSK_URL"
-echo "Modus: Chrome Kiosk"
-echo "Bruker: $KIOSK_USER"
+echo "Chrome skal nå starte:"
 echo ""
-echo "Start maskinen på nytt for å teste:"
+echo "  $KIOSK_URL"
 echo ""
-echo "sudo reboot"
+echo "i full kiosk-modus."
+echo ""
+echo "Kiosk-script:"
+echo "  $KIOSK_HOME/kiosk.sh"
+echo ""
+echo "Autostart:"
+echo "  $KIOSK_HOME/.config/autostart/kiosk.desktop"
+echo ""
+echo "Restart maskinen med:"
+echo ""
+echo "  sudo reboot"
 echo ""
