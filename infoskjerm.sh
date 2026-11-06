@@ -122,7 +122,7 @@ sudo tee /etc/opt/chrome/policies/managed/ssn-kiosk.json >/dev/null <<EOF
 }
 EOF
 
-chmod 644 /etc/opt/chrome/policies/managed/ssn-kiosk.json
+sudo chmod 644 /etc/opt/chrome/policies/managed/ssn-kiosk.json
 
 echo ""
 echo "=========================================="
